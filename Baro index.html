@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulador 3D + Osciloscopio en Vivo - Sensor BARO</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #090d16;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #f8fafc;
+      user-select: none;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    /* PANEL DE CONTROL SUPERIOR DERECHO */
+    .dashboard {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 330px;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(10px);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 18px;
+      z-index: 10;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    h2 {
+      margin: 0 0 4px 0;
+      font-size: 15px;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 14px;
+    }
+    .slider-group {
+      margin-bottom: 14px;
+    }
+    .slider-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #e2e8f0;
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: #0284c7;
+      cursor: pointer;
+    }
+    .readout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .readout-card {
+      background: #1e293b;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border-left: 3px solid #0284c7;
+    }
+    .readout-card.signal {
+      border-left-color: #facc15;
+    }
+    .readout-title {
+      font-size: 9.5px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 2px;
+    }
+    .readout-value {
+      font-family: Consolas, monospace;
+      font-size: 17px;
+      font-weight: bold;
+      color: #f8fafc;
+    }
+    .ecu-box {
+      background: #0f172a;
+      border: 1px dashed #475569;
+      border-radius: 6px;
+      padding: 9px;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-bottom: 14px;
+    }
+    .ecu-box strong {
+      color: #10b981;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .btn-action {
+      width: 100%;
+      background: #0284c7;
+      border: none;
+      color: white;
+      padding: 9px;
+      font-size: 11px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: background 0.2s;
+    }
+    .btn-action:hover {
+      background: #0369a1;
+    }
+    .btn-action.secondary {
+      background: #334155;
+    }
+    .btn-action.secondary:hover {
+      background: #475569;
+    }
+    .btn-action.alert {
+      background: #dc2626;
+    }
+    .btn-action.alert:hover {
+      background: #b91c1c;
+    }
+
+    /* PANTALLA DEL OSCILOSCOPIO AUTOMOTRIZ (INFERIOR IZQUIERDA) */
+    .scope-container {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 420px;
+      background: rgba(11, 17, 32, 0.95);
+      border: 2px solid #334155;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.7);
+      z-index: 10;
+      overflow: hidden;
+    }
+    .scope-header {
+      background: #1e293b;
+      padding: 6px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #334155;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+    }
+    .scope-header .ch-badge {
+      background: #0284c7;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: bold;
+    }
+    .scope-header .volt-live {
+      color: #facc15;
+      font-weight: bold;
+    }
+    canvas#scope-canvas {
+      display: block;
+      background: #000000;
+    }
+    .scope-footer {
+      background: #0f172a;
+      padding: 4px 10px;
+      font-size: 10px;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid #1e293b;
+      font-family: Consolas, monospace;
+    }
+
+    .instructions {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #94a3b8;
+      z-index: 10;
+      border: 1px solid #334155;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div class="instructions">
+    🖱️ <strong>Click izquierdo + arrastrar:</strong> Rotar 3D &bull; <strong>Rueda:</strong> Zoom
+  </div>
+
+  <!-- PANTALLA DEL OSCILOSCOPIO AUTOMOTRIZ EN VIVO -->
+  <div class="scope-container">
+    <div class="scope-header">
+      <div>
+        <span class="ch-badge">CH A</span>
+        <span style="color:#38bdf8; margin-left:6px;">1.00 V/div</span>
+      </div>
+      <div>
+        <span>V_ACTUAL: </span><span class="volt-live" id="scope-volt-text">4.02 V</span>
+      </div>
+    </div>
+    <canvas id="scope-canvas" width="420" height="210"></canvas>
+    <div class="scope-footer">
+      <span>Base Tiempo: 500 ms/div</span>
+      <span>Acoplamiento: DC</span>
+      <span style="color:#10b981;">Modo: En Vivo (Roll)</span>
+    </div>
+  </div>
+
+  <!-- PANEL DE CONTROL LATERAL -->
+  <div class="dashboard">
+    <h2>Sensor BARO Interactivo</h2>
+    <div class="subtitle">Laboratorio 3D + Osciloscopio de Diagnóstico</div>
+
+    <div class="slider-group">
+      <label>
+        <span>Altitud simulada</span>
+        <span id="alt-val" style="color:#38bdf8;">0 m (Nivel del Mar)</span>
+      </label>
+      <input type="range" id="alt-slider" min="0" max="4000" step="25" value="0">
+    </div>
+
+    <div class="readout-grid">
+      <div class="readout-card">
+        <div class="readout-title">Presión Barométrica</div>
+        <div class="readout-value" id="press-val">101.3 <span style="font-size:11px;">kPa</span></div>
+      </div>
+      <div class="readout-card signal">
+        <div class="readout-title">Tensión Señal (ECU)</div>
+        <div class="readout-value" id="volt-val" style="color:#facc15;">4.02 <span style="font-size:11px;">V</span></div>
+      </div>
+    </div>
+
+    <div class="ecu-box" id="ecu-feedback">
+      <strong>Estado ECU:</strong> Masa de aire densa nominal. Corrección lambda &lambda; = 1.0. Objetivo de turbo al 100%.
+    </div>
+
+    <div class="btn-group">
+      <button class="btn-action" id="btn-cut">Ver corte interno (MEMS)</button>
+      <button class="btn-action secondary" id="btn-vac">Simular Prueba Bomba de Vacío</button>
+      <button class="btn-action secondary" id="btn-glitch">Simular Falso Contacto / Ruido</button>
+    </div>
+  </div>
+
+  <script>
+    // 1. CONFIGURACIÓN THREE.JS
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0f1d);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(7, 4.5, 9);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Luces
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    dirLight.position.set(10, 15, 10);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    const blueLight = new THREE.PointLight(0x0284c7, 1.2, 25);
+    blueLight.position.set(-6, 4, -4);
+    scene.add(blueLight);
+
+    // 2. MODELADO 3D
+    const sensorGroup = new THREE.Group();
+    scene.add(sensorGroup);
+
+    const blackPlastic = new THREE.MeshStandardMaterial({ color: 0x1e242d, roughness: 0.45, metalness: 0.1 });
+    const brassMaterial = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3, metalness: 0.8 });
+    const siliconMaterial = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2, metalness: 0.5, transparent: true, opacity: 0.9 });
+
+    // Carcasa exterior
+    const bodyGeo = new THREE.CylinderGeometry(1.6, 1.6, 1.8, 32);
+    const bodyMesh = new THREE.Mesh(bodyGeo, blackPlastic);
+    bodyMesh.castShadow = true;
+    sensorGroup.add(bodyMesh);
+
+    const capGeo = new THREE.CylinderGeometry(1.4, 1.6, 0.4, 32);
+    const capMesh = new THREE.Mesh(capGeo, blackPlastic);
+    capMesh.position.y = 1.1;
+    sensorGroup.add(capMesh);
+
+    const portGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.8, 32);
+    const portMesh = new THREE.Mesh(portGeo, blackPlastic);
+    portMesh.position.y = 1.6;
+    sensorGroup.add(portMesh);
+
+    const portHoleGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.82, 32);
+    const portHoleMat = new THREE.MeshBasicMaterial({ color: 0x05070a });
+    const portHole = new THREE.Mesh(portHoleGeo, portHoleMat);
+    portHole.position.y = 1.6;
+    sensorGroup.add(portHole);
+
+    // Conector y pines
+    const connGeo = new THREE.BoxGeometry(1.2, 0.8, 1.2);
+    const connMesh = new THREE.Mesh(connGeo, blackPlastic);
+    connMesh.position.set(0, -0.6, 1.6);
+    sensorGroup.add(connMesh);
+
+    const pinGeo = new THREE.BoxGeometry(0.1, 0.1, 0.7);
+    for (let i = -1; i <= 1; i++) {
+      const pin = new THREE.Mesh(pinGeo, brassMaterial);
+      pin.position.set(i * 0.35, -0.6, 2.0);
+      sensorGroup.add(pin);
+    }
+
+    // Sujeción
+    const earGeo = new THREE.BoxGeometry(0.8, 0.3, 1.5);
+    const earMesh = new THREE.Mesh(earGeo, blackPlastic);
+    earMesh.position.set(1.8, -0.6, 0);
+    sensorGroup.add(earMesh);
+
+    const holeGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.35, 16);
+    const holeMesh = new THREE.Mesh(holeGeo, portHoleMat);
+    holeMesh.position.set(1.9, -0.6, 0);
+    sensorGroup.add(holeMesh);
+
+    // Interior MEMS
+    const internalGroup = new THREE.Group();
+    sensorGroup.add(internalGroup);
+
+    const pcbGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 32);
+    const pcbMat = new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.5 });
+    const pcbMesh = new THREE.Mesh(pcbGeo, pcbMat);
+    pcbMesh.position.y = -0.2;
+    internalGroup.add(pcbMesh);
+
+    const chamberGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.25, 32);
+    const chamberMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 });
+    const chamberMesh = new THREE.Mesh(chamberGeo, chamberMat);
+    chamberMesh.position.y = 0.0;
+    internalGroup.add(chamberMesh);
+
+    const diaphragmGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.05, 32);
+    const diaphragmMesh = new THREE.Mesh(diaphragmGeo, siliconMaterial);
+    diaphragmMesh.position.y = 0.15;
+    internalGroup.add(diaphragmMesh);
+
+    const bridgeGeo = new THREE.TorusGeometry(0.35, 0.03, 8, 32);
+    const bridgeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+    const bridgeMesh = new THREE.Mesh(bridgeGeo, bridgeMat);
+    bridgeMesh.rotation.x = Math.PI / 2;
+    bridgeMesh.position.y = 0.18;
+    internalGroup.add(bridgeMesh);
+
+    const floorGeo = new THREE.PlaneGeometry(30, 30);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x060913, roughness: 0.8 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // 3. OSCILOSCOPIO DIGITAL
+    const scopeCanvas = document.getElementById('scope-canvas');
+    const sCtx = scopeCanvas.getContext('2d');
+    const sWidth = scopeCanvas.width;
+    const sHeight = scopeCanvas.height;
+
+    const bufferLength = sWidth;
+    const voltBuffer = new Array(bufferLength).fill(4.02);
+    let currentLiveVoltage = 4.02;
+    let glitchActive = false;
+
+    function drawOscilloscope() {
+      sCtx.fillStyle = '#05070a';
+      sCtx.fillRect(0, 0, sWidth, sHeight);
+
+      // Retícula
+      sCtx.strokeStyle = '#1e293b';
+      sCtx.lineWidth = 1;
+      const numCols = 10;
+      const numRows = 5;
+
+      for (let c = 0; c <= numCols; c++) {
+        let x = (sWidth / numCols) * c;
+        sCtx.beginPath();
+        sCtx.moveTo(x, 0);
+        sCtx.lineTo(x, sHeight);
+        sCtx.stroke();
+      }
+      for (let r = 0; r <= numRows; r++) {
+        let y = (sHeight / numRows) * r;
+        sCtx.beginPath();
+        sCtx.moveTo(0, y);
+        sCtx.lineTo(sWidth, y);
+        sCtx.stroke();
+      }
+
+      // Marcas de escala
+      sCtx.fillStyle = '#64748b';
+      sCtx.font = '9px Consolas, monospace';
+      for (let v = 0; v <= 5; v++) {
+        let yPos = sHeight - (v * (sHeight / 5)) - (v === 0 ? 3 : -8);
+        if (v === 5) yPos = 12;
+        sCtx.fillText(`${v}.0V`, sWidth - 28, yPos);
+      }
+
+      // Desplazamiento de traza
+      voltBuffer.shift();
+      let noisyVoltage = currentLiveVoltage;
+      if (glitchActive) {
+        noisyVoltage += (Math.random() - 0.5) * 1.8;
+      }
+      voltBuffer.push(noisyVoltage);
+
+      // Señal amarilla
+      sCtx.strokeStyle = '#facc15';
+      sCtx.lineWidth = 2.2;
+      sCtx.beginPath();
+      for (let x = 0; x < bufferLength; x++) {
+        const v = voltBuffer[x];
+        const y = sHeight - (v / 5.0) * sHeight;
+        if (x === 0) {
+          sCtx.moveTo(x, y);
+        } else {
+          sCtx.lineTo(x, y);
+        }
+      }
+      sCtx.stroke();
+    }
+
+    // 4. LÓGICA DE GESTIÓN Y DINÁMICA
+    const altSlider = document.getElementById('alt-slider');
+    const altVal = document.getElementById('alt-val');
+    const pressVal = document.getElementById('press-val');
+    const voltVal = document.getElementById('volt-val');
+    const scopeVoltText = document.getElementById('scope-volt-text');
+    const ecuFeedback = document.getElementById('ecu-feedback');
+
+    function updateSimulation(customAlt = null) {
+      const alt = customAlt !== null ? customAlt : parseFloat(altSlider.value);
+      
+      const press = 101.325 * Math.pow(1 - 0.0065 * alt / 288.15, 5.255);
+      
+      let volt = 0.5 + (press - 20) * (4.0 / 95);
+      if (volt > 4.5) volt = 4.5;
+      if (volt < 0.5) volt = 0.5;
+
+      currentLiveVoltage = volt;
+
+      altVal.innerText = alt <= 0 ? "0 m (Nivel del Mar)" : `${Math.round(alt)} m s.n.m.`;
+      pressVal.innerHTML = `${press.toFixed(1)} <span style="font-size:11px;">kPa</span>`;
+      voltVal.innerHTML = `${volt.toFixed(2)} <span style="font-size:11px;">V</span>`;
+      scopeVoltText.innerText = `${volt.toFixed(2)} V`;
+
+      // Deformación de membrana
+      const maxDeflection = -0.08;
+      const deflectionRatio = (press - 60) / (101.3 - 60);
+      const currentY = 0.15 + (deflectionRatio * maxDeflection);
+      diaphragmMesh.position.y = currentY;
+      bridgeMesh.position.y = currentY + 0.03;
+      bridgeMat.color.setHSL(0.12 + (1 - deflectionRatio) * 0.4, 1.0, 0.5);
+
+      if (alt < 800) {
+        ecuFeedback.innerHTML = `<strong>Estado ECU:</strong> Masa de aire densa nominal. Corrección lambda &lambda; = 1.0. Objetivo de turbo al 100%.`;
+      } else if (alt >= 800 && alt < 2200) {
+        ecuFeedback.innerHTML = `<strong>Estado ECU:</strong> Aire moderado. Inyección: <strong>-8%</strong> ancho de pulso. Avance encendido: <strong>+3°</strong>.`;
+      } else {
+        ecuFeedback.innerHTML = `<strong>Estado ECU (Alta Montaña):</strong> Aire enrarecido. Inyección: <strong>-18%</strong>. <strong>Protección Turbo Activa:</strong> Soplado limitado (Anti-Overspeed).`;
+      }
+    }
+
+    altSlider.addEventListener('input', () => updateSimulation());
+
+    // 5. BOTONES DE ACCIÓN
+    let isCutActive = false;
+    const btnCut = document.getElementById('btn-cut');
+    btnCut.addEventListener('click', () => {
+      isCutActive = !isCutActive;
+      const opacity = isCutActive ? 0.25 : 1.0;
+      bodyMesh.material.transparent = isCutActive;
+      bodyMesh.material.opacity = opacity;
+      capMesh.material.transparent = isCutActive;
+      capMesh.material.opacity = opacity;
+      portMesh.material.transparent = isCutActive;
+      portMesh.material.opacity = opacity;
+      btnCut.innerText = isCutActive ? "Ver sensor cerrado (Normal)" : "Ver corte interno (MEMS)";
+      btnCut.style.background = isCutActive ? "#10b981" : "#0284c7";
+    });
+
+    const btnVac = document.getElementById('btn-vac');
+    let isVacRunning = false;
+    btnVac.addEventListener('click', () => {
+      if (isVacRunning) return;
+      isVacRunning = true;
+      btnVac.style.background = "#f59e0b";
+      btnVac.innerText = "Aplicando Vacío...";
+
+      let step = 0;
+      const originalAlt = parseFloat(altSlider.value);
+      const vacInterval = setInterval(() => {
+        step++;
+        if (step <= 30) {
+          const target = originalAlt + (3800 - originalAlt) * (step / 30);
+          altSlider.value = target;
+          updateSimulation(target);
+        } else if (step <= 55) {
+          btnVac.innerText = "Vacío sostenido (~1.5 V)";
+        } else if (step <= 58) {
+          btnVac.innerText = "Alivio instantáneo";
+          altSlider.value = originalAlt;
+          updateSimulation(originalAlt);
+        } else {
+          clearInterval(vacInterval);
+          btnVac.style.background = "#334155";
+          btnVac.innerText = "Simular Prueba Bomba de Vacío";
+          isVacRunning = false;
+        }
+      }, 50);
+    });
+
+    const btnGlitch = document.getElementById('btn-glitch');
+    btnGlitch.addEventListener('click', () => {
+      glitchActive = !glitchActive;
+      if (glitchActive) {
+        btnGlitch.classList.add('alert');
+        btnGlitch.innerText = "Desactivar Falso Contacto";
+        ecuFeedback.innerHTML = `<strong>ALERTA DTC P2230:</strong> Señal errática detectada. Computadora en modo de emergencia.`;
+      } else {
+        btnGlitch.classList.remove('alert');
+        btnGlitch.innerText = "Simular Falso Contacto / Ruido";
+        updateSimulation();
+      }
+    });
+
+    // 6. BUCLE PRINCIPAL
+    updateSimulation();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (!controls.state == -1) {
+        sensorGroup.rotation.y += 0.0025;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+      drawOscilloscope();
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
